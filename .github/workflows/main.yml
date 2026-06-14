@@ -30,13 +30,13 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        run: npm install
+        run: npm install @google/generative-ai
 
       - name: Build project
         env:
           VITE_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: npx vite build --no-minify
+        run: npx vite build
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
