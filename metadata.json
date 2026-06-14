@@ -1,0 +1,6 @@
+{
+  "name": "AI Calorie Tracker",
+  "description": "Умный ИИ-трекер осознанного питания с распознаванием блюд по фото и безопасными рекомендациями для подростков.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
