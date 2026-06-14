@@ -1,3 +1,4 @@
+import { GoogleGenAI } from '@google/generative-ai';
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Camera, 
@@ -116,7 +117,11 @@ const getAgeSuffix = (age: number) => {
   if (lastDigit >= 2 && lastDigit <= 4) return 'года';
   return 'лет';
 };
+// Подтягиваем ключ, который мы бережно пробросили через GitHub Secrets и main.yml
+const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.GEMINI_API_KEY;
 
+// Создаем инстанс ИИ напрямую для фронтенда
+const aiInstance = GEMINI_KEY ? new GoogleGenAI({ apiKey: GEMINI_KEY }) : null;
 export default function App() {
   // Application states
   const [logs, setLogs] = useState<MealLog[]>(() => {
@@ -259,7 +264,7 @@ export default function App() {
     localStorage.setItem('nutra_carb_target', String(carbTarget));
   }, [carbTarget]);
 
-  // Trigger custom AI congratulations and active overlay
+ // Trigger custom AI congratulations and active overlay
   const triggerAchievementCelebration = async (type: 'water' | 'protein') => {
     setIsFetchingAchievement(true);
     setActiveAchievement({
@@ -267,6 +272,32 @@ export default function App() {
       text: "NÚTRA AI настраивает персональный триггер вдохновения..."
     });
 
+    try {
+      if (!aiInstance) throw new Error("Ключ API не инициализирован");
+      
+      const model = aiInstance.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      const prompt = `Ты — бережный ИИ-нутрициолог в приложении NÚTRA. Напиши краткое (1-2 предложения), супер-вдохновляющее поздравление для подростка по имени ${profile.name} (возраст: ${profile.age}). Он только что выполнил дневную норму по направлению: ${type === 'water' ? 'Вода и гидратация' : 'Белок и строительный материал для мышц'}. Тон теплый, поддерживающий, мотивирующий, без душноты и токсичных рамок.`;
+      
+      const result = await model.generateContent(prompt);
+      const text = result.response.text();
+      
+      if (text) {
+        setActiveAchievement({ type, text: text.trim() });
+      } else {
+        throw new Error("Empty response");
+      }
+    } catch (e) {
+      console.error("Failed to generate congratulations message through API:", e);
+      setActiveAchievement({
+        type,
+        text: type === 'water'
+          ? `Ура! Ты достиг своей нормы воды за сегодня (${waterGoal} мл). Твой организм наполнен чистой энергией для сияния кожи и ясного ума! 💧`
+          : `Супер! Дневная норма белка (${proteinTarget}г) успешно восполнена. Ткани и мышцы получают отличный строительный материал для сил и фокуса! 🧠🏋️`
+      });
+    } finally {
+      setIsFetchingAchievement(false);
+    }
+  };
     try {
       const response = await fetch("/api/achievement-compliment", {
         method: "POST",
@@ -458,6 +489,55 @@ export default function App() {
     setAnalysisResult(null);
 
     try {
+      if (!aiInstance) throw new Error('Упс! API ключ еще не активен или не прописан в GitHub Secrets.');
+
+      const model = aiInstance.getGenerativeModel({ 
+        model: 'gemini-1.5-flash',
+        generationConfig: { responseMimeType: "application/json" }
+      });
+
+      const prompt = `Ты — экспертный ИИ-анализатор еды в приложении NÚTRA для подростков. Твоя задача — проанализировать блюдо по описанию: "${textDescription || selectedQuickPreset}". 
+      Верни СТРОГО JSON-объект следующей структуры (без лишних слов и markdown-разметки):
+      {
+        "mealName": "Название блюда на русском",
+        "estimatedWeight": "Примерный вес, например 300г",
+        "calories": 450,
+        "proteins": 20,
+        "fats": 15,
+        "carbs": 55,
+        "ingredients": [
+          {"name": "Ингредиент 1", "amount": "100г", "calories": 120},
+          {"name": "Ингредиент 2", "amount": "50г", "calories": 80}
+        ],
+        "teenFriendlyAdvice": "Бережный, поддерживающий совет на русском языке о пользе этого блюда для энергии, мозга или тренировок, строго БЕЗ диет, ограничений и токсичного подсчета."
+      }`;
+
+      const result = await model.generateContent(prompt);
+      const data = JSON.parse(result.response.text());
+      setAnalysisResult(data);
+    } catch (err: any) {
+      console.error(err);
+      setApiError('Ошибка прямого подключения к Gemini API. Использован локальный демо-анализ.');
+      
+      setAnalysisResult({
+        mealName: textDescription || selectedQuickPreset || "Сбалансированное блюдо",
+        estimatedWeight: "290г",
+        calories: 430,
+        proteins: 18,
+        fats: 14,
+        carbs: 52,
+        ingredients: [
+          { name: "Свежие ингредиенты", amount: "200г", calories: 250 },
+          { name: "Соус или заправка", amount: "90г", calories: 180 }
+        ],
+        teenFriendlyAdvice: "Прекрасный выбор! Это блюдо отлично наполняет твое тело здоровыми компонентами. Не забудь выпить стакан чистой воды в течение часа для поддержания идеального гидратационного баланса!"
+      });
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+    try {
       const payload = {
         image: capturedImage, // base64 payload
         description: textDescription || selectedQuickPreset || "",
@@ -557,6 +637,36 @@ export default function App() {
   const handleSendChatMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInput.trim()) return;
+
+    const userMsg = chatInput.trim();
+    setChatMessages(prev => [...prev, { sender: 'user', text: userMsg }]);
+    setChatInput("");
+    setIsChatLoading(true);
+
+    try {
+      if (!aiInstance) throw new Error();
+      
+      const contextMeals = logs.slice(0, 3).map(l => `${l.mealName} (${l.calories}ккал)`).join(', ');
+      const model = aiInstance.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      
+      const finalPrompt = `Ответь на вопрос подростка на русском языке. Вопрос: "${userMsg}". Последние приемы пищи для контекста: ${contextMeals || 'пока нет логов'}. Фокусируйся абсолютно на позитивных привычках, сбалансированности, здоровье мозга, спорте, силе, энергии, БЕЗ диет, запретов, похудения и подсчетов. Тон нежный и поддерживающий. Выдавай краткий, приятный и стильный ответ до 3-4 предложений.`;
+
+      const result = await model.generateContent(finalPrompt);
+      const replyText = result.response.text();
+      
+      setChatMessages(prev => [...prev, { sender: 'ai', text: replyText.trim() }]);
+    } catch {
+      let fallbackText = "Твой вопрос шикарен! Здоровый образ жизни — это в первую очередь гармония твоих мыслей и удовольствие от разнообразных продуктов. Помни о важности сытных завтраков со сложными углеводами, они защищают тебя от упадка сил на лекциях и тренировок!";
+      if (userMsg.toLowerCase().includes("вод") || userMsg.toLowerCase().includes("пить")) {
+        fallbackText = "Чистая вода — это супергерой твоего метаболизма! Она поставляет кислород клеткам, помогает сохранять свежесть кожи и избавляет от ложной усталости. Твоя норма около 1.5 - 2 литров в день.";
+      } else if (userMsg.toLowerCase().includes("слад") || userMsg.toLowerCase().includes("шоколад") || userMsg.toLowerCase().includes("сахар")) {
+        fallbackText = "Сладкое — это быстрый источник глюкозы, которая так нужна мозгу! Вкусности — это нормально, они дарят радость. Отличной практикой будет кушать сладкое сытым после основного обеда, чтобы энергия оставалась ровной и стабильной.";
+      }
+      setChatMessages(prev => [...prev, { sender: 'ai', text: fallbackText }]);
+    } finally {
+      setIsChatLoading(false);
+    }
+  };
 
     const userMsg = chatInput.trim();
     setChatMessages(prev => [...prev, { sender: 'user', text: userMsg }]);
