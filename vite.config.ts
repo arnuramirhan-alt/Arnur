@@ -4,7 +4,7 @@ import path from 'path';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: '/Arn/', 
+  base: '/Arnur/', // <--- ПОМЕНЯЛИ НА Arnur СЛЕШИ С ОБЕИХ СТОРОН ОБЯЗАТЕЛЬНЫ
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
