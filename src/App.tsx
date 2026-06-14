@@ -264,7 +264,7 @@ export default function App() {
     localStorage.setItem('nutra_carb_target', String(carbTarget));
   }, [carbTarget]);
 
- // Trigger custom AI congratulations and active overlay
+// Trigger custom AI congratulations and active overlay
   const triggerAchievementCelebration = (type: 'water' | 'protein') => {
     setIsFetchingAchievement(true);
     setActiveAchievement({
@@ -272,37 +272,48 @@ export default function App() {
       text: "NÚTRA AI настраивает персональный триггер вдохновения..."
     });
 
-    // Изолированная асинхронная функция для esbuild
-    const runAI = async () => {
-      try {
-        if (!aiInstance) throw new Error("Ключ API не инициализирован");
-        
-        const model = aiInstance.getGenerativeModel({ model: 'gemini-1.5-flash' });
-        const prompt = `Ты — бережный ИИ-нутрициолог в приложении NÚTRA. Напиши краткое (1-2 предложения), супер-вдохновляющее поздравление для подростка по имени ${profile.name} (возраст: ${profile.age}). Он только что выполнил дневную норму по направлению: ${type === 'water' ? 'Вода и гидратация' : 'Белок и строительный материал для мышц'}. Тон теплый, поддерживающий, мотивирующий, без душноты и токсичных рамок.`;
-        
-        const result = await model.generateContent(prompt);
-        const text = result.response.text();
-        
-        if (text) {
-          setActiveAchievement({ type, text: text.trim() });
-        } else {
-          throw new Error("Empty response");
-        }
-      } catch (e) {
-        console.error("Failed to generate congratulations message through API:", e);
-        setActiveAchievement({
-          type,
-          text: type === 'water'
-            ? `Ура! Ты достиг своей нормы воды за сегодня (${waterGoal} мл). Твой организм наполнен чистой энергией для сияния кожи и ясного ума! 💧`
-            : `Супер! Дневная норма белка (${proteinTarget}г) успешно восполнена. Ткани и мышцы получают отличный строительный материал для сил и фокуса! 🧠🏋️`
-        });
-      } finally {
-        setIsFetchingAchievement(false);
-      }
-    };
+    if (!aiInstance) {
+      setIsFetchingAchievement(false);
+      setActiveAchievement({
+        type,
+        text: type === 'water'
+          ? `Ура! Ты достиг своей нормы воды за сегодня (${waterGoal} мл). Твой организм наполнен чистой энергией для сияния кожи и ясного ума! 💧`
+          : `Супер! Дневная норма белка (${proteinTarget}г) успешно восполнена. Ткани и мышцы получают отличный строительный материал для сил и фокуса! 🧠🏋️`
+      });
+      return;
+    }
 
-    // Запускаем её
-    runAI();
+    try {
+      const model = aiInstance.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      const prompt = `Ты — бережный ИИ-нутрициолог в приложении NÚTRA. Напиши краткое (1-2 предложения), супер-вдохновляющее поздравление для подростка по имени ${profile.name} (возраст: ${profile.age}). Он только что выполнил дневную норму по направлению: ${type === 'water' ? 'Вода и гидратация' : 'Белок и строительный материал для мышц'}. Тон теплый, поддерживающий, мотивирующий, без душноты и токсичных рамок.`;
+      
+      // Работаем через старый добрый .then без всяких await
+      model.generateContent(prompt)
+        .then(result => {
+          const text = result.response.text();
+          if (text) {
+            setActiveAchievement({ type, text: text.trim() });
+          } else {
+            throw new Error("Empty response");
+          }
+        })
+        .catch(e => {
+          console.error("Failed to generate congratulations message through API:", e);
+          setActiveAchievement({
+            type,
+            text: type === 'water'
+              ? `Ура! Ты достиг своей нормы воды за сегодня (${waterGoal} мл). Твой организм наполнен чистой энергией для сияния кожи и ясного ума! 💧`
+              : `Супер! Дневная норма белка (${proteinTarget}г) успешно восполнена. Ткани и мышцы получают отличный строительный материал для сил и фокуса! 🧠🏋️`
+          });
+        })
+        .finally(() => {
+          setIsFetchingAchievement(false);
+        });
+
+    } catch (e) {
+      console.error(e);
+      setIsFetchingAchievement(false);
+    }
   };
 
     try {
