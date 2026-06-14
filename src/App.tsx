@@ -298,6 +298,33 @@ export default function App() {
       setIsFetchingAchievement(false);
     }
   };
+
+    try {
+      if (!aiInstance) throw new Error("Ключ API не инициализирован");
+      
+      const model = aiInstance.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      const prompt = `Ты — бережный ИИ-нутрициолог в приложении NÚTRA. Напиши краткое (1-2 предложения), супер-вдохновляющее поздравление для подростка по имени ${profile.name} (возраст: ${profile.age}). Он только что выполнил дневную норму по направлению: ${type === 'water' ? 'Вода и гидратация' : 'Белок и строительный материал для мышц'}. Тон теплый, поддерживающий, мотивирующий, без душноты и токсичных рамок.`;
+      
+      const result = await model.generateContent(prompt);
+      const text = result.response.text();
+      
+      if (text) {
+        setActiveAchievement({ type, text: text.trim() });
+      } else {
+        throw new Error("Empty response");
+      }
+    } catch (e) {
+      console.error("Failed to generate congratulations message through API:", e);
+      setActiveAchievement({
+        type,
+        text: type === 'water'
+          ? `Ура! Ты достиг своей нормы воды за сегодня (${waterGoal} мл). Твой организм наполнен чистой энергией для сияния кожи и ясного ума! 💧`
+          : `Супер! Дневная норма белка (${proteinTarget}г) успешно восполнена. Ткани и мышцы получают отличный строительный материал для сил и фокуса! 🧠🏋️`
+      });
+    } finally {
+      setIsFetchingAchievement(false);
+    }
+  };
     try {
       const response = await fetch("/api/achievement-compliment", {
         method: "POST",
