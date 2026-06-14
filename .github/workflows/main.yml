@@ -32,13 +32,11 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-     - name: Build project
+      - name: Build project
         env:
           VITE_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: |
-          node -e "const fs = require('fs'); const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8')); if (pkg.scripts && pkg.scripts.build) { pkg.scripts.build = 'vite build --force'; fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2)); }"
-          npx vite build
+        run: npx vite build --no-minify
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
